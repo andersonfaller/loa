@@ -1,0 +1,771 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lines of Action (LOA)</title>
+    <style>
+        :root {
+            --bg-color: #f0f4f8;
+            --board-color: #d1d5db;
+            --cell-color: #ffffff;
+            --cell-alt-color: #e5e7eb;
+            --black-piece: #1f2937;
+            --white-piece: #f3f4f6;
+            --white-border: #9ca3af;
+            --highlight-move: #86efac;
+            --highlight-selected: #93c5fd;
+            --highlight-last: #fde047;
+            --text-color: #374151;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+
+        h1 { margin-bottom: 10px; font-weight: 300; letter-spacing: 2px; }
+
+        .controls {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            margin-bottom: 20px;
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            justify-content: center;
+            align-items: center;
+        }
+
+        select, button {
+            padding: 8px 16px;
+            border: 1px solid #cbd5e1;
+            border-radius: 4px;
+            background: white;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+
+        button.primary {
+            background-color: #3b82f6;
+            color: white;
+            border: none;
+            font-weight: 600;
+        }
+
+        button.primary:hover { background-color: #2563eb; }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        button.secondary {
+            background-color: #e5e7eb;
+            color: #374151;
+            border: 1px solid #d1d5db;
+        }
+        button.secondary:hover { background-color: #d1d5db; }
+
+        .status-bar {
+            margin-bottom: 15px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            height: 24px;
+        }
+
+        .game-board {
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            width: min(90vw, 480px);
+            height: min(90vw, 480px);
+            border: 4px solid #4b5563;
+            background-color: var(--board-color);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        }
+
+        .cell {
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        /* Checkerboard pattern */
+        .cell:nth-child(16n + 1), .cell:nth-child(16n + 3), .cell:nth-child(16n + 5), .cell:nth-child(16n + 7),
+        .cell:nth-child(16n + 10), .cell:nth-child(16n + 12), .cell:nth-child(16n + 14), .cell:nth-child(16n + 16) {
+            background-color: var(--cell-color);
+        }
+        .cell:nth-child(16n + 2), .cell:nth-child(16n + 4), .cell:nth-child(16n + 6), .cell:nth-child(16n + 8),
+        .cell:nth-child(16n + 9), .cell:nth-child(16n + 11), .cell:nth-child(16n + 13), .cell:nth-child(16n + 15) {
+            background-color: var(--cell-alt-color);
+        }
+
+        .cell.selected { background-color: var(--highlight-selected) !important; }
+        .cell.valid-move::after {
+            content: '';
+            position: absolute;
+            width: 30%;
+            height: 30%;
+            background-color: var(--highlight-move);
+            border-radius: 50%;
+            z-index: 15;
+            box-shadow: 0 0 2px rgba(0,0,0,0.3);
+        }
+        .cell.last-move { background-color: var(--highlight-last) !important; }
+
+        .piece {
+            width: 80%;
+            height: 80%;
+            border-radius: 50%;
+            box-shadow: 0 3px 5px rgba(0,0,0,0.3);
+            transition: transform 0.2s;
+            z-index: 10;
+        }
+
+        .piece.black {
+            background: radial-gradient(circle at 30% 30%, #4b5563, #000000);
+        }
+
+        .piece.white {
+            background: radial-gradient(circle at 30% 30%, #ffffff, #d1d5db);
+            border: 1px solid var(--white-border);
+        }
+
+        .message-modal {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.5);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+        }
+
+        .modal-content {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            text-align: center;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+            max-width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .tutorial-text {
+            text-align: left;
+            line-height: 1.6;
+            margin-bottom: 20px;
+        }
+        .tutorial-text h3 { margin-top: 0; color: #2563eb; }
+        .tutorial-text ul { padding-left: 20px; }
+        .tutorial-text li { margin-bottom: 8px; }
+
+        .spinner {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border: 2px solid rgba(0,0,0,0.1);
+            border-left-color: #3b82f6;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-left: 8px;
+        }
+
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+    </style>
+</head>
+<body>
+
+    <h1>Lines of Action</h1>
+
+    <div class="controls">
+        <div>
+            <label for="playerColor">Your Color:</label>
+            <select id="playerColor">
+                <option value="1">Black (Starts)</option>
+                <option value="-1">White</option>
+            </select>
+        </div>
+        <div>
+            <label for="difficulty">Difficulty:</label>
+            <select id="difficulty">
+                <option value="1">Easy</option>
+                <option value="2" selected>Normal</option>
+                <option value="3">Hard</option>
+            </select>
+        </div>
+        <button class="primary" onclick="startGame()">New Game</button>
+        <button class="secondary" onclick="openTutorial()">How to Play</button>
+    </div>
+
+    <div class="status-bar" id="status"></div>
+    <div class="game-board" id="board"></div>
+
+    <!-- Game Over Modal -->
+    <div class="message-modal" id="modal">
+        <div class="modal-content">
+            <h2 id="modal-title">Game Over</h2>
+            <p id="modal-message"></p>
+            <button class="primary" onclick="closeModal()">Close</button>
+        </div>
+    </div>
+
+    <!-- Tutorial Modal -->
+    <div class="message-modal" id="tutorial-modal">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="tutorial-text">
+                <h3>Rules of Lines of Action</h3>
+                <p><strong>Goal:</strong> Connect all your pieces into a single contiguous group (horizontal, vertical, or diagonal connections count).</p>
+                <ul>
+                    <li><strong>Movement:</strong> A piece moves exactly as many squares as there are pieces (friendly or enemy) on the line in which it is moving.</li>
+                    <li><strong>Jumping:</strong> You can jump over your own pieces, but you cannot jump over enemy pieces.</li>
+                    <li><strong>Capturing:</strong> You can land on an enemy piece to capture it. The enemy piece is removed from the game.</li>
+                    <li><strong>Winning:</strong> The game ends when a player has all their remaining pieces connected. If a move connects both players' pieces simultaneously, the moving player wins.</li>
+                </ul>
+            </div>
+            <button class="primary" onclick="closeTutorial()">Got it!</button>
+        </div>
+    </div>
+
+<script>
+    // --- Constants ---
+    const BOARD_SIZE = 8;
+    const BLACK = 1;
+    const WHITE = -1;
+    const EMPTY = 0;
+
+    // --- State ---
+    let board = []; // 2D array
+    let turn = BLACK;
+    let playerSide = BLACK;
+    let aiSide = WHITE;
+    let difficulty = 2;
+    let selectedCell = null;
+    let legalMovesForSelected = [];
+    let lastMove = null;
+    let gameOver = false;
+    let isThinking = false;
+
+    // --- DOM Elements ---
+    const boardEl = document.getElementById('board');
+    const statusEl = document.getElementById('status');
+    const playerColorSelect = document.getElementById('playerColor');
+    const difficultySelect = document.getElementById('difficulty');
+    const modal = document.getElementById('modal');
+    const tutorialModal = document.getElementById('tutorial-modal');
+
+    // --- Initialization ---
+    function initBoard() {
+        // Standard LOA setup
+        board = Array(BOARD_SIZE).fill(null).map(() => Array(BOARD_SIZE).fill(EMPTY));
+        
+        for (let i = 1; i < 7; i++) {
+            board[0][i] = BLACK;
+            board[7][i] = BLACK;
+            board[i][0] = WHITE;
+            board[i][7] = WHITE;
+        }
+    }
+
+    function startGame() {
+        initBoard();
+        playerSide = parseInt(playerColorSelect.value);
+        aiSide = -playerSide;
+        difficulty = parseInt(difficultySelect.value);
+        turn = BLACK; // Black always starts
+        selectedCell = null;
+        lastMove = null;
+        gameOver = false;
+        isThinking = false;
+        
+        renderBoard();
+        updateStatus();
+
+        if (turn === aiSide) {
+            setTimeout(aiMove, 500);
+        }
+    }
+
+    // --- Core Game Logic ---
+
+    // Directions: [dr, dc]
+    const DIRECTIONS = [
+        [-1, 0], [1, 0], [0, -1], [0, 1], // Orthogonal
+        [-1, -1], [-1, 1], [1, -1], [1, 1] // Diagonal
+    ];
+
+    function isValidPos(r, c) {
+        return r >= 0 && r < BOARD_SIZE && c >= 0 && c < BOARD_SIZE;
+    }
+
+    function getPiecesOnLine(b, r, c, dr, dc) {
+        let count = 0;
+        // Check forward
+        let tr = r + dr, tc = c + dc;
+        while (isValidPos(tr, tc)) {
+            if (b[tr][tc] !== EMPTY) count++;
+            tr += dr; tc += dc;
+        }
+        // Check backward
+        tr = r - dr; tc = c - dc;
+        while (isValidPos(tr, tc)) {
+            if (b[tr][tc] !== EMPTY) count++;
+            tr -= dr; tc -= dc;
+        }
+        // Add self
+        return count + 1;
+    }
+
+    function getLegalMoves(b, r, c) {
+        const moves = [];
+        const piece = b[r][c];
+        if (piece === EMPTY) return moves;
+
+        for (let [dr, dc] of DIRECTIONS) {
+            const lineCount = getPiecesOnLine(b, r, c, dr, dc);
+            const targetR = r + (dr * lineCount);
+            const targetC = c + (dc * lineCount);
+
+            if (!isValidPos(targetR, targetC)) continue;
+
+            const targetPiece = b[targetR][targetC];
+            
+            // Cannot land on friendly piece
+            if (targetPiece === piece) continue;
+
+            // Check for blocking enemy pieces in the path
+            let blocked = false;
+            for (let k = 1; k < lineCount; k++) {
+                const stepR = r + (dr * k);
+                const stepC = c + (dc * k);
+                if (b[stepR][stepC] === -piece) { // Enemy
+                    blocked = true;
+                    break;
+                }
+            }
+
+            if (!blocked) {
+                moves.push({r: targetR, c: targetC});
+            }
+        }
+        return moves;
+    }
+
+    function getAllMoves(b, player) {
+        let allMoves = [];
+        for (let r = 0; r < BOARD_SIZE; r++) {
+            for (let c = 0; c < BOARD_SIZE; c++) {
+                if (b[r][c] === player) {
+                    const moves = getLegalMoves(b, r, c);
+                    moves.forEach(m => {
+                        allMoves.push({
+                            from: {r, c},
+                            to: m
+                        });
+                    });
+                }
+            }
+        }
+        return allMoves;
+    }
+
+    // Win Detection (Connectivity)
+    function checkWin(b) {
+        const blackWin = isConnected(b, BLACK);
+        const whiteWin = isConnected(b, WHITE);
+
+        if (blackWin && whiteWin) return 'DRAW_WIN_MOVE'; // Simultaneous connection usually favors Mover, handled in main loop
+        if (blackWin) return BLACK;
+        if (whiteWin) return WHITE;
+        return null;
+    }
+
+    function isConnected(b, player) {
+        let pieces = [];
+        for (let r = 0; r < BOARD_SIZE; r++) {
+            for (let c = 0; c < BOARD_SIZE; c++) {
+                if (b[r][c] === player) pieces.push({r, c});
+            }
+        }
+
+        if (pieces.length <= 1) return true; // 0 or 1 piece is connected by definition
+
+        // BFS to find connected component size
+        let visited = new Set();
+        let queue = [pieces[0]];
+        visited.add(`${pieces[0].r},${pieces[0].c}`);
+        let count = 0;
+
+        while (queue.length > 0) {
+            const {r, c} = queue.shift();
+            count++;
+
+            // Check all 8 neighbors
+            for (let [dr, dc] of DIRECTIONS) {
+                const nr = r + dr, nc = c + dc;
+                if (isValidPos(nr, nc) && b[nr][nc] === player) {
+                    const key = `${nr},${nc}`;
+                    if (!visited.has(key)) {
+                        visited.add(key);
+                        queue.push({r: nr, c: nc});
+                    }
+                }
+            }
+        }
+
+        return count === pieces.length;
+    }
+
+    function applyMove(b, move) {
+        const newBoard = b.map(row => [...row]);
+        newBoard[move.to.r][move.to.c] = newBoard[move.from.r][move.from.c];
+        newBoard[move.from.r][move.from.c] = EMPTY;
+        return newBoard;
+    }
+
+    // --- AI Logic (Minimax + AlphaBeta) ---
+
+    // Heuristic Evaluation
+    function evaluateBoard(b, player) {
+        // 1. Connectivity (Most important) - Negative score for number of isolated groups
+        // 2. Centralization - Rewards pieces near center
+        // 3. Material - Slight bonus for having pieces (though usually less is better for connectivity, losing too many is bad)
+
+        // Helper to get Center of Mass and Groups
+        function getMetrics(p) {
+            let pieces = [];
+            let centerX = 0, centerY = 0;
+            let groupCount = 0;
+            let visited = new Set();
+
+            for(let r=0; r<8; r++) {
+                for(let c=0; c<8; c++) {
+                    if(b[r][c] === p) {
+                        pieces.push({r,c});
+                        centerX += r;
+                        centerY += c;
+                    }
+                }
+            }
+
+            if (pieces.length === 0) return { groups: 0, concentration: 0, count: 0 };
+            
+            centerX /= pieces.length;
+            centerY /= pieces.length;
+
+            // Calculate concentration (inverse of average distance squared from COM)
+            let totalDistSq = 0;
+            pieces.forEach(pc => {
+                totalDistSq += (pc.r - centerX)**2 + (pc.c - centerY)**2;
+            });
+            let concentration = -totalDistSq; // Closer is better (less negative)
+
+            // Count groups
+            pieces.forEach(pc => {
+                const key = `${pc.r},${pc.c}`;
+                if(!visited.has(key)) {
+                    groupCount++;
+                    // BFS to mark group
+                    let q = [pc];
+                    visited.add(key);
+                    while(q.length > 0) {
+                        let curr = q.pop();
+                        for(let [dr, dc] of DIRECTIONS) {
+                            let nr = curr.r + dr, nc = curr.c + dc;
+                            if(isValidPos(nr, nc) && b[nr][nc] === p) {
+                                let nKey = `${nr},${nc}`;
+                                if(!visited.has(nKey)) {
+                                    visited.add(nKey);
+                                    q.push({r:nr, c:nc});
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+
+            return { groups: groupCount, concentration, count: pieces.length };
+        }
+
+        const myMetrics = getMetrics(player);
+        const oppMetrics = getMetrics(-player);
+
+        if (myMetrics.groups === 1 && myMetrics.count > 0) return 10000; // Win
+        if (oppMetrics.groups === 1 && oppMetrics.count > 0) return -10000; // Loss
+
+        // Weights
+        const W_GROUPS = 200;
+        const W_CONC = 2;
+        const W_MAT = 10;
+        
+        let score = 0;
+        
+        // Fewer groups is better
+        score += (oppMetrics.groups - myMetrics.groups) * W_GROUPS;
+        
+        // Higher concentration is better
+        score += (myMetrics.concentration - oppMetrics.concentration) * W_CONC;
+
+        // Material is subtle in LOA. Sometimes fewer is better, but getting wiped out is bad.
+        // Let's just keep it minimal.
+        score += (myMetrics.count - oppMetrics.count) * W_MAT;
+
+        // Position on board (Edges are bad usually)
+        // ... omitted for performance/simplicity, concentration handles it mostly
+
+        return score;
+    }
+
+    function minimax(b, depth, alpha, beta, maximizingPlayer) {
+        const winner = checkWin(b);
+        if (winner !== null) {
+            if (winner === 'DRAW_WIN_MOVE') return maximizingPlayer ? 10000 : -10000; // Current mover wins ties
+            return (winner === aiSide) ? 10000 + depth : -10000 - depth;
+        }
+
+        if (depth === 0) {
+            return evaluateBoard(b, aiSide);
+        }
+
+        const player = maximizingPlayer ? aiSide : -aiSide;
+        const moves = getAllMoves(b, player);
+        
+        // Move ordering: try captures or moves toward center first? 
+        // For simplicity, random shuffle to vary play slightly or just keeping as is.
+        // Sorting moves by distance to center can help alpha-beta pruning.
+
+        if (moves.length === 0) {
+            // No moves available? In LOA this is rare but usually means loss or stalemate.
+            // If blocked, opponent wins.
+            return -10000; 
+        }
+
+        if (maximizingPlayer) {
+            let maxEval = -Infinity;
+            for (let move of moves) {
+                const newBoard = applyMove(b, move);
+                // Check immediate win condition rule: If move connects me, I win immediately even if enemy also connected
+                if (isConnected(newBoard, aiSide)) return 10000 + depth;
+
+                const ev = minimax(newBoard, depth - 1, alpha, beta, false);
+                maxEval = Math.max(maxEval, ev);
+                alpha = Math.max(alpha, ev);
+                if (beta <= alpha) break;
+            }
+            return maxEval;
+        } else {
+            let minEval = Infinity;
+            for (let move of moves) {
+                const newBoard = applyMove(b, move);
+                 // Check immediate win condition for opponent
+                 if (isConnected(newBoard, -aiSide)) return -10000 - depth;
+
+                const ev = minimax(newBoard, depth - 1, alpha, beta, true);
+                minEval = Math.min(minEval, ev);
+                beta = Math.min(beta, ev);
+                if (beta <= alpha) break;
+            }
+            return minEval;
+        }
+    }
+
+    function aiMove() {
+        if (gameOver) return;
+        isThinking = true;
+        updateStatus();
+
+        // Use setTimeout to allow UI to render "Thinking..."
+        setTimeout(() => {
+            const moves = getAllMoves(board, aiSide);
+            if (moves.length === 0) {
+                endGame(-aiSide); // Cannot move, lose
+                return;
+            }
+
+            let bestMove = null;
+            let bestValue = -Infinity;
+            let alpha = -Infinity;
+            let beta = Infinity;
+
+            // Depth based on difficulty
+            // Easy: 1, Normal: 2, Hard: 3 (LOA branching factor is high ~30, depth 4 is slow in JS)
+            let searchDepth = difficulty; 
+            if (difficulty === 3) searchDepth = 3; 
+
+            for (let move of moves) {
+                const newBoard = applyMove(board, move);
+                
+                // Instant Win Check
+                if (isConnected(newBoard, aiSide)) {
+                    bestMove = move;
+                    break;
+                }
+
+                const moveValue = minimax(newBoard, searchDepth - 1, alpha, beta, false);
+                
+                if (moveValue > bestValue) {
+                    bestValue = moveValue;
+                    bestMove = move;
+                }
+                alpha = Math.max(alpha, moveValue);
+            }
+
+            if (bestMove) {
+                executeMove(bestMove);
+            } else {
+                // Fallback (shouldn't happen unless blocked)
+                executeMove(moves[0]);
+            }
+        }, 50);
+    }
+
+    // --- Interaction ---
+
+    function handleCellClick(r, c) {
+        if (gameOver || isThinking || turn !== playerSide) return;
+
+        const piece = board[r][c];
+
+        // If clicking a valid move target
+        const move = legalMovesForSelected.find(m => m.r === r && m.c === c);
+        if (move) {
+            executeMove({from: selectedCell, to: move});
+            return;
+        }
+
+        // If clicking own piece (Select)
+        if (piece === playerSide) {
+            selectedCell = {r, c};
+            legalMovesForSelected = getLegalMoves(board, r, c);
+            renderBoard();
+        } else {
+            // Deselect
+            selectedCell = null;
+            legalMovesForSelected = [];
+            renderBoard();
+        }
+    }
+
+    function executeMove(move) {
+        board = applyMove(board, move);
+        lastMove = move;
+        selectedCell = null;
+        legalMovesForSelected = [];
+        
+        // Check win conditions
+        // Rule: If a move creates a win for BOTH, the moving player wins.
+        const moverWin = isConnected(board, turn);
+        const opponentWin = isConnected(board, -turn);
+
+        renderBoard();
+
+        if (moverWin) {
+            endGame(turn);
+        } else if (opponentWin) {
+            // Opponent won due to my move (rare, usually by me capturing piece that connected them)
+            endGame(-turn);
+        } else {
+            // Next turn
+            turn = -turn;
+            isThinking = false;
+            updateStatus();
+            
+            if (turn === aiSide) {
+                aiMove();
+            }
+        }
+    }
+
+    function endGame(winner) {
+        gameOver = true;
+        isThinking = false;
+        updateStatus();
+        let msg = winner === BLACK ? "Black Wins!" : "White Wins!";
+        if (winner === playerSide) msg += " Congratulations!";
+        else msg += " Try again.";
+        
+        document.getElementById('modal-title').innerText = winner === playerSide ? "Victory!" : "Defeat";
+        document.getElementById('modal-message').innerText = msg;
+        modal.style.display = 'flex';
+    }
+
+    function closeModal() {
+        modal.style.display = 'none';
+    }
+    
+    function openTutorial() {
+        tutorialModal.style.display = 'flex';
+    }
+
+    function closeTutorial() {
+        tutorialModal.style.display = 'none';
+    }
+
+    // --- Rendering ---
+    function renderBoard() {
+        boardEl.innerHTML = '';
+        
+        for (let r = 0; r < BOARD_SIZE; r++) {
+            for (let c = 0; c < BOARD_SIZE; c++) {
+                const cell = document.createElement('div');
+                cell.className = 'cell';
+                cell.onclick = () => handleCellClick(r, c);
+
+                // Highlights
+                if (selectedCell && selectedCell.r === r && selectedCell.c === c) {
+                    cell.classList.add('selected');
+                }
+                if (lastMove && ( (lastMove.from.r === r && lastMove.from.c === c) || (lastMove.to.r === r && lastMove.to.c === c) )) {
+                    cell.classList.add('last-move');
+                }
+                if (legalMovesForSelected.some(m => m.r === r && m.c === c)) {
+                    cell.classList.add('valid-move');
+                }
+
+                // Pieces
+                const pieceVal = board[r][c];
+                if (pieceVal !== EMPTY) {
+                    const piece = document.createElement('div');
+                    piece.className = `piece ${pieceVal === BLACK ? 'black' : 'white'}`;
+                    cell.appendChild(piece);
+                }
+
+                boardEl.appendChild(cell);
+            }
+        }
+    }
+
+    function updateStatus() {
+        let text = "";
+        if (gameOver) {
+            text = "Game Over";
+        } else {
+            if (turn === playerSide) text = "Your Turn";
+            else text = "Computer thinking";
+        }
+        
+        if (isThinking) {
+            statusEl.innerHTML = `${text} <div class="spinner"></div>`;
+        } else {
+            statusEl.textContent = text;
+        }
+    }
+
+    // Start
+    startGame();
+
+</script>
+</body>
+</html>
