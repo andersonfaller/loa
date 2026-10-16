@@ -1,771 +1,250 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="pt-BR">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Lines of Action (LOA)</title>
-    <style>
-        :root {
-            --bg-color: #f0f4f8;
-            --board-color: #d1d5db;
-            --cell-color: #ffffff;
-            --cell-alt-color: #e5e7eb;
-            --black-piece: #1f2937;
-            --white-piece: #f3f4f6;
-            --white-border: #9ca3af;
-            --highlight-move: #86efac;
-            --highlight-selected: #93c5fd;
-            --highlight-last: #fde047;
-            --text-color: #374151;
-        }
-
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: var(--bg-color);
-            color: var(--text-color);
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            min-height: 100vh;
-            margin: 0;
-            padding: 20px;
-        }
-
-        h1 { margin-bottom: 10px; font-weight: 300; letter-spacing: 2px; }
-
-        .controls {
-            background: white;
-            padding: 15px;
-            border-radius: 8px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-            margin-bottom: 20px;
-            display: flex;
-            gap: 15px;
-            flex-wrap: wrap;
-            justify-content: center;
-            align-items: center;
-        }
-
-        select, button {
-            padding: 8px 16px;
-            border: 1px solid #cbd5e1;
-            border-radius: 4px;
-            background: white;
-            cursor: pointer;
-            font-size: 14px;
-            transition: all 0.2s;
-        }
-
-        button.primary {
-            background-color: #3b82f6;
-            color: white;
-            border: none;
-            font-weight: 600;
-        }
-
-        button.primary:hover { background-color: #2563eb; }
-        button:disabled { opacity: 0.5; cursor: not-allowed; }
-
-        button.secondary {
-            background-color: #e5e7eb;
-            color: #374151;
-            border: 1px solid #d1d5db;
-        }
-        button.secondary:hover { background-color: #d1d5db; }
-
-        .status-bar {
-            margin-bottom: 15px;
-            font-size: 1.1rem;
-            font-weight: 600;
-            height: 24px;
-        }
-
-        .game-board {
-            display: grid;
-            grid-template-columns: repeat(8, 1fr);
-            width: min(90vw, 480px);
-            height: min(90vw, 480px);
-            border: 4px solid #4b5563;
-            background-color: var(--board-color);
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
-        }
-
-        .cell {
-            position: relative;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            user-select: none;
-        }
-
-        /* Checkerboard pattern */
-        .cell:nth-child(16n + 1), .cell:nth-child(16n + 3), .cell:nth-child(16n + 5), .cell:nth-child(16n + 7),
-        .cell:nth-child(16n + 10), .cell:nth-child(16n + 12), .cell:nth-child(16n + 14), .cell:nth-child(16n + 16) {
-            background-color: var(--cell-color);
-        }
-        .cell:nth-child(16n + 2), .cell:nth-child(16n + 4), .cell:nth-child(16n + 6), .cell:nth-child(16n + 8),
-        .cell:nth-child(16n + 9), .cell:nth-child(16n + 11), .cell:nth-child(16n + 13), .cell:nth-child(16n + 15) {
-            background-color: var(--cell-alt-color);
-        }
-
-        .cell.selected { background-color: var(--highlight-selected) !important; }
-        .cell.valid-move::after {
-            content: '';
-            position: absolute;
-            width: 30%;
-            height: 30%;
-            background-color: var(--highlight-move);
-            border-radius: 50%;
-            z-index: 15;
-            box-shadow: 0 0 2px rgba(0,0,0,0.3);
-        }
-        .cell.last-move { background-color: var(--highlight-last) !important; }
-
-        .piece {
-            width: 80%;
-            height: 80%;
-            border-radius: 50%;
-            box-shadow: 0 3px 5px rgba(0,0,0,0.3);
-            transition: transform 0.2s;
-            z-index: 10;
-        }
-
-        .piece.black {
-            background: radial-gradient(circle at 30% 30%, #4b5563, #000000);
-        }
-
-        .piece.white {
-            background: radial-gradient(circle at 30% 30%, #ffffff, #d1d5db);
-            border: 1px solid var(--white-border);
-        }
-
-        .message-modal {
-            position: fixed;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(0,0,0,0.5);
-            display: none;
-            align-items: center;
-            justify-content: center;
-            z-index: 100;
-        }
-
-        .modal-content {
-            background: white;
-            padding: 30px;
-            border-radius: 12px;
-            text-align: center;
-            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
-            max-width: 90%;
-            max-height: 90vh;
-            overflow-y: auto;
-        }
-
-        .tutorial-text {
-            text-align: left;
-            line-height: 1.6;
-            margin-bottom: 20px;
-        }
-        .tutorial-text h3 { margin-top: 0; color: #2563eb; }
-        .tutorial-text ul { padding-left: 20px; }
-        .tutorial-text li { margin-bottom: 8px; }
-
-        .spinner {
-            display: inline-block;
-            width: 12px;
-            height: 12px;
-            border: 2px solid rgba(0,0,0,0.1);
-            border-left-color: #3b82f6;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin-left: 8px;
-        }
-
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Lines of Action</title>
+  <meta name="description" content="Lines of Action (LOA) — jogo de estratégia abstrato contra uma IA forte, ou entre dois jogadores.">
+  <meta name="theme-color" content="#0d1017">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23151a24'/%3E%3Cpath d='M18 46L32 32L46 18M32 32L46 46' stroke='%23f2b45a' stroke-width='5' stroke-linecap='round'/%3E%3Ccircle cx='18' cy='46' r='8' fill='%23f6efe0'/%3E%3Ccircle cx='32' cy='32' r='8' fill='%23f6efe0'/%3E%3Ccircle cx='46' cy='18' r='8' fill='%23f6efe0'/%3E%3Ccircle cx='46' cy='46' r='8' fill='%23f6efe0'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <radialGradient id="g-black" cx="33%" cy="28%" r="75%">
+        <stop offset="0" stop-color="#7a808e"/><stop offset=".3" stop-color="#353a45"/><stop offset=".7" stop-color="#14161b"/><stop offset="1" stop-color="#050506"/>
+      </radialGradient>
+      <radialGradient id="g-white" cx="33%" cy="28%" r="75%">
+        <stop offset="0" stop-color="#ffffff"/><stop offset=".3" stop-color="#faf6ee"/><stop offset=".7" stop-color="#e3d8c3"/><stop offset="1" stop-color="#c3b496"/>
+      </radialGradient>
+      <marker id="mk-green" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="3" markerHeight="3" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" fill="#2f8f5b"/></marker>
+      <marker id="mk-red" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="3" markerHeight="3" orient="auto-start-reverse"><path d="M0 0 10 5 0 10z" fill="#e0503a"/></marker>
+      <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+      <symbol id="i-undo" viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></symbol>
+      <symbol id="i-bulb" viewBox="0 0 24 24"><path d="M9 18h6M10 22h4"/><path d="M15.1 14c.2-1 .7-1.7 1.4-2.5A6 6 0 1 0 6 8c0 1.3.5 2.4 1.5 3.5.7.8 1.2 1.5 1.4 2.5"/></symbol>
+      <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></symbol>
+      <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01"/></symbol>
+      <symbol id="i-sound" viewBox="0 0 24 24"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a10 10 0 0 1 0 14"/></symbol>
+      <symbol id="i-mute" viewBox="0 0 24 24"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="m22 9-6 6M16 9l6 6"/></symbol>
+      <symbol id="i-pause" viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></symbol>
+      <symbol id="i-play" viewBox="0 0 24 24"><path d="m7 4 13 8-13 8V4z"/></symbol>
+      <symbol id="i-first" viewBox="0 0 24 24"><path d="m17 18-6-6 6-6M7 6v12"/></symbol>
+      <symbol id="i-prev" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></symbol>
+      <symbol id="i-next" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+      <symbol id="i-last" viewBox="0 0 24 24"><path d="m7 18 6-6-6-6M17 6v12"/></symbol>
+      <symbol id="i-close" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+      <symbol id="i-cpu" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="2"/><path d="M9 9h6v6H9zM9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3"/></symbol>
+      <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></symbol>
+      <symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="4"/><path d="M2 21a7 7 0 0 1 14 0M16 4a4 4 0 0 1 0 8M22 21a7 7 0 0 0-4-6.3"/></symbol>
+      <symbol id="i-stone" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.5"/></symbol>
+      <symbol id="i-group" viewBox="0 0 24 24"><circle cx="6" cy="17" r="3"/><circle cx="18" cy="17" r="3"/><circle cx="12" cy="6" r="3"/><path d="M7.7 14.5 10.4 8.6M13.6 8.6l2.7 5.9M9 17h6"/></symbol>
+      <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></symbol>
+    </defs>
+  </svg>
 
-    <h1>Lines of Action</h1>
+  <div class="app">
+    <header class="topbar">
+      <a class="brand" href="./" aria-label="Lines of Action">
+        <svg class="brand-mark" viewBox="0 0 64 64" aria-hidden="true">
+          <path d="M16 48 32 32 48 16M32 32l16 16" />
+          <circle cx="16" cy="48" r="8" class="m-white" />
+          <circle cx="32" cy="32" r="8" class="m-white" />
+          <circle cx="48" cy="16" r="8" class="m-white" />
+          <circle cx="48" cy="48" r="8" class="m-black" />
+        </svg>
+        <span class="brand-text">
+          <span class="brand-title">Lines of Action</span>
+          <span class="brand-tag" data-i18n="tagline">Conecte todas as suas peças</span>
+        </span>
+      </a>
+      <nav class="top-actions">
+        <button class="icon-btn" id="btn-rules" data-i18n-title="rules"><svg><use href="#i-help"/></svg></button>
+        <button class="icon-btn" id="btn-sound" data-i18n-title="sound"><svg><use href="#i-sound"/></svg></button>
+        <button class="icon-btn" id="btn-settings" data-i18n-title="settings"><svg><use href="#i-gear"/></svg></button>
+      </nav>
+    </header>
 
-    <div class="controls">
-        <div>
-            <label for="playerColor">Your Color:</label>
-            <select id="playerColor">
-                <option value="1">Black (Starts)</option>
-                <option value="-1">White</option>
-            </select>
-        </div>
-        <div>
-            <label for="difficulty">Difficulty:</label>
-            <select id="difficulty">
-                <option value="1">Easy</option>
-                <option value="2" selected>Normal</option>
-                <option value="3">Hard</option>
-            </select>
-        </div>
-        <button class="primary" onclick="startGame()">New Game</button>
-        <button class="secondary" onclick="openTutorial()">How to Play</button>
-    </div>
+    <main class="layout">
+      <section class="stage">
+        <div class="player-card" id="card-top"></div>
 
-    <div class="status-bar" id="status"></div>
-    <div class="game-board" id="board"></div>
-
-    <!-- Game Over Modal -->
-    <div class="message-modal" id="modal">
-        <div class="modal-content">
-            <h2 id="modal-title">Game Over</h2>
-            <p id="modal-message"></p>
-            <button class="primary" onclick="closeModal()">Close</button>
-        </div>
-    </div>
-
-    <!-- Tutorial Modal -->
-    <div class="message-modal" id="tutorial-modal">
-        <div class="modal-content" style="max-width: 500px;">
-            <div class="tutorial-text">
-                <h3>Rules of Lines of Action</h3>
-                <p><strong>Goal:</strong> Connect all your pieces into a single contiguous group (horizontal, vertical, or diagonal connections count).</p>
-                <ul>
-                    <li><strong>Movement:</strong> A piece moves exactly as many squares as there are pieces (friendly or enemy) on the line in which it is moving.</li>
-                    <li><strong>Jumping:</strong> You can jump over your own pieces, but you cannot jump over enemy pieces.</li>
-                    <li><strong>Capturing:</strong> You can land on an enemy piece to capture it. The enemy piece is removed from the game.</li>
-                    <li><strong>Winning:</strong> The game ends when a player has all their remaining pieces connected. If a move connects both players' pieces simultaneously, the moving player wins.</li>
-                </ul>
+        <div class="board-row">
+          <div class="eval-bar" id="eval-bar" role="img">
+            <div class="eval-fill" id="eval-fill"></div>
+            <span class="eval-label" id="eval-label"></span>
+          </div>
+          <div class="board-frame">
+            <div class="board" id="board" aria-label="Tabuleiro">
+              <div class="squares" id="squares"></div>
+              <svg class="layer links" id="links" viewBox="0 0 8 8" preserveAspectRatio="none" aria-hidden="true"></svg>
+              <div class="layer pieces" id="pieces"></div>
+              <svg class="layer arrows" id="arrows" viewBox="0 0 8 8" aria-hidden="true">
+                <defs>
+                  <marker id="arrowhead" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="3.2" markerHeight="3.2" orient="auto-start-reverse">
+                    <path d="M0 0 10 5 0 10z" />
+                  </marker>
+                  <marker id="arrowhead-hint" class="hint-head" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="3" markerHeight="3" orient="auto-start-reverse">
+                    <path d="M0 0 10 5 0 10z" />
+                  </marker>
+                </defs>
+                <g id="arrows-g"></g>
+              </svg>
+              <div class="board-banner" id="board-banner" hidden></div>
             </div>
-            <button class="primary" onclick="closeTutorial()">Got it!</button>
+          </div>
         </div>
+
+        <div class="player-card" id="card-bottom"></div>
+      </section>
+
+      <aside class="panel">
+        <div class="status-card">
+          <div class="status-main" id="status-main"></div>
+          <div class="status-sub" id="status-sub"></div>
+        </div>
+
+        <div class="actions">
+          <button class="btn primary" id="btn-new"><svg><use href="#i-plus"/></svg><span data-i18n="newGame">Nova partida</span></button>
+          <button class="btn" id="btn-undo"><svg><use href="#i-undo"/></svg><span data-i18n="undo">Desfazer</span></button>
+          <button class="btn" id="btn-hint"><svg><use href="#i-bulb"/></svg><span data-i18n="hint">Dica</span></button>
+          <button class="btn" id="btn-pause" hidden><svg><use href="#i-pause"/></svg><span data-i18n="pause">Pausar</span></button>
+        </div>
+
+        <div class="moves-card">
+          <div class="moves-head">
+            <span data-i18n="moves">Lances</span>
+            <div class="nav-btns">
+              <button class="icon-btn sm" id="nav-first" data-i18n-title="navFirst"><svg><use href="#i-first"/></svg></button>
+              <button class="icon-btn sm" id="nav-prev" data-i18n-title="navPrev"><svg><use href="#i-prev"/></svg></button>
+              <button class="icon-btn sm" id="nav-next" data-i18n-title="navNext"><svg><use href="#i-next"/></svg></button>
+              <button class="icon-btn sm" id="nav-last" data-i18n-title="navLast"><svg><use href="#i-last"/></svg></button>
+            </div>
+          </div>
+          <ol class="move-list" id="move-list"></ol>
+          <div class="moves-empty" id="moves-empty" data-i18n="noMoves">As pretas começam. Boa partida!</div>
+        </div>
+
+        <div class="info-line" id="info-line"></div>
+      </aside>
+    </main>
+
+    <footer class="footer">
+      <span data-i18n="footer">Jogo de Claude Soucie (1969).</span>
+      <a href="https://github.com/andersonfaller/loa" target="_blank" rel="noopener">GitHub</a>
+    </footer>
+  </div>
+
+  <!-- New game -->
+  <div class="modal" id="modal-setup" role="dialog" aria-modal="true" aria-labelledby="setup-title" hidden>
+    <div class="modal-card">
+      <button class="icon-btn modal-close" data-close data-i18n-title="close"><svg><use href="#i-close"/></svg></button>
+      <h2 id="setup-title" data-i18n="newGame">Nova partida</h2>
+
+      <div class="field">
+        <div class="field-label" data-i18n="mode">Modo</div>
+        <div class="choice-grid three" id="opt-mode">
+          <button class="choice" data-value="ai"><svg><use href="#i-cpu"/></svg><span data-i18n="modeAi">Contra o computador</span></button>
+          <button class="choice" data-value="pvp"><svg><use href="#i-users"/></svg><span data-i18n="modePvp">Dois jogadores</span></button>
+          <button class="choice" data-value="aivai"><svg><use href="#i-eye"/></svg><span data-i18n="modeAiAi">Assistir IA × IA</span></button>
+        </div>
+      </div>
+
+      <div class="field" data-for="ai">
+        <div class="field-label" data-i18n="yourColor">Suas peças</div>
+        <div class="segmented" id="opt-color">
+          <button data-value="black"><i class="dot black"></i><span data-i18n="blackStarts">Pretas (começam)</span></button>
+          <button data-value="white"><i class="dot white"></i><span data-i18n="whiteSide">Brancas</span></button>
+          <button data-value="random"><i class="dot random"></i><span data-i18n="random">Sorteio</span></button>
+        </div>
+      </div>
+
+      <div class="field" data-for="ai aivai">
+        <div class="field-label" data-i18n="difficulty">Dificuldade</div>
+        <div class="levels" id="opt-level"></div>
+        <div class="level-desc" id="level-desc"></div>
+      </div>
+
+      <div class="field">
+        <div class="field-label" data-i18n="variant">Variante</div>
+        <div class="segmented" id="opt-variant">
+          <button data-value="standard"><span data-i18n="variantStandard">Clássica</span></button>
+          <button data-value="scrambled"><span data-i18n="variantScrambled">Scrambled Eggs</span></button>
+        </div>
+      </div>
+
+      <button class="btn primary wide" id="btn-start" data-i18n="start">Começar</button>
     </div>
-
-<script>
-    // --- Constants ---
-    const BOARD_SIZE = 8;
-    const BLACK = 1;
-    const WHITE = -1;
-    const EMPTY = 0;
-
-    // --- State ---
-    let board = []; // 2D array
-    let turn = BLACK;
-    let playerSide = BLACK;
-    let aiSide = WHITE;
-    let difficulty = 2;
-    let selectedCell = null;
-    let legalMovesForSelected = [];
-    let lastMove = null;
-    let gameOver = false;
-    let isThinking = false;
-
-    // --- DOM Elements ---
-    const boardEl = document.getElementById('board');
-    const statusEl = document.getElementById('status');
-    const playerColorSelect = document.getElementById('playerColor');
-    const difficultySelect = document.getElementById('difficulty');
-    const modal = document.getElementById('modal');
-    const tutorialModal = document.getElementById('tutorial-modal');
-
-    // --- Initialization ---
-    function initBoard() {
-        // Standard LOA setup
-        board = Array(BOARD_SIZE).fill(null).map(() => Array(BOARD_SIZE).fill(EMPTY));
-        
-        for (let i = 1; i < 7; i++) {
-            board[0][i] = BLACK;
-            board[7][i] = BLACK;
-            board[i][0] = WHITE;
-            board[i][7] = WHITE;
-        }
-    }
-
-    function startGame() {
-        initBoard();
-        playerSide = parseInt(playerColorSelect.value);
-        aiSide = -playerSide;
-        difficulty = parseInt(difficultySelect.value);
-        turn = BLACK; // Black always starts
-        selectedCell = null;
-        lastMove = null;
-        gameOver = false;
-        isThinking = false;
-        
-        renderBoard();
-        updateStatus();
-
-        if (turn === aiSide) {
-            setTimeout(aiMove, 500);
-        }
-    }
-
-    // --- Core Game Logic ---
-
-    // Directions: [dr, dc]
-    const DIRECTIONS = [
-        [-1, 0], [1, 0], [0, -1], [0, 1], // Orthogonal
-        [-1, -1], [-1, 1], [1, -1], [1, 1] // Diagonal
-    ];
-
-    function isValidPos(r, c) {
-        return r >= 0 && r < BOARD_SIZE && c >= 0 && c < BOARD_SIZE;
-    }
-
-    function getPiecesOnLine(b, r, c, dr, dc) {
-        let count = 0;
-        // Check forward
-        let tr = r + dr, tc = c + dc;
-        while (isValidPos(tr, tc)) {
-            if (b[tr][tc] !== EMPTY) count++;
-            tr += dr; tc += dc;
-        }
-        // Check backward
-        tr = r - dr; tc = c - dc;
-        while (isValidPos(tr, tc)) {
-            if (b[tr][tc] !== EMPTY) count++;
-            tr -= dr; tc -= dc;
-        }
-        // Add self
-        return count + 1;
-    }
-
-    function getLegalMoves(b, r, c) {
-        const moves = [];
-        const piece = b[r][c];
-        if (piece === EMPTY) return moves;
-
-        for (let [dr, dc] of DIRECTIONS) {
-            const lineCount = getPiecesOnLine(b, r, c, dr, dc);
-            const targetR = r + (dr * lineCount);
-            const targetC = c + (dc * lineCount);
-
-            if (!isValidPos(targetR, targetC)) continue;
-
-            const targetPiece = b[targetR][targetC];
-            
-            // Cannot land on friendly piece
-            if (targetPiece === piece) continue;
-
-            // Check for blocking enemy pieces in the path
-            let blocked = false;
-            for (let k = 1; k < lineCount; k++) {
-                const stepR = r + (dr * k);
-                const stepC = c + (dc * k);
-                if (b[stepR][stepC] === -piece) { // Enemy
-                    blocked = true;
-                    break;
-                }
-            }
-
-            if (!blocked) {
-                moves.push({r: targetR, c: targetC});
-            }
-        }
-        return moves;
-    }
-
-    function getAllMoves(b, player) {
-        let allMoves = [];
-        for (let r = 0; r < BOARD_SIZE; r++) {
-            for (let c = 0; c < BOARD_SIZE; c++) {
-                if (b[r][c] === player) {
-                    const moves = getLegalMoves(b, r, c);
-                    moves.forEach(m => {
-                        allMoves.push({
-                            from: {r, c},
-                            to: m
-                        });
-                    });
-                }
-            }
-        }
-        return allMoves;
-    }
-
-    // Win Detection (Connectivity)
-    function checkWin(b) {
-        const blackWin = isConnected(b, BLACK);
-        const whiteWin = isConnected(b, WHITE);
-
-        if (blackWin && whiteWin) return 'DRAW_WIN_MOVE'; // Simultaneous connection usually favors Mover, handled in main loop
-        if (blackWin) return BLACK;
-        if (whiteWin) return WHITE;
-        return null;
-    }
-
-    function isConnected(b, player) {
-        let pieces = [];
-        for (let r = 0; r < BOARD_SIZE; r++) {
-            for (let c = 0; c < BOARD_SIZE; c++) {
-                if (b[r][c] === player) pieces.push({r, c});
-            }
-        }
-
-        if (pieces.length <= 1) return true; // 0 or 1 piece is connected by definition
-
-        // BFS to find connected component size
-        let visited = new Set();
-        let queue = [pieces[0]];
-        visited.add(`${pieces[0].r},${pieces[0].c}`);
-        let count = 0;
-
-        while (queue.length > 0) {
-            const {r, c} = queue.shift();
-            count++;
-
-            // Check all 8 neighbors
-            for (let [dr, dc] of DIRECTIONS) {
-                const nr = r + dr, nc = c + dc;
-                if (isValidPos(nr, nc) && b[nr][nc] === player) {
-                    const key = `${nr},${nc}`;
-                    if (!visited.has(key)) {
-                        visited.add(key);
-                        queue.push({r: nr, c: nc});
-                    }
-                }
-            }
-        }
-
-        return count === pieces.length;
-    }
-
-    function applyMove(b, move) {
-        const newBoard = b.map(row => [...row]);
-        newBoard[move.to.r][move.to.c] = newBoard[move.from.r][move.from.c];
-        newBoard[move.from.r][move.from.c] = EMPTY;
-        return newBoard;
-    }
-
-    // --- AI Logic (Minimax + AlphaBeta) ---
-
-    // Heuristic Evaluation
-    function evaluateBoard(b, player) {
-        // 1. Connectivity (Most important) - Negative score for number of isolated groups
-        // 2. Centralization - Rewards pieces near center
-        // 3. Material - Slight bonus for having pieces (though usually less is better for connectivity, losing too many is bad)
-
-        // Helper to get Center of Mass and Groups
-        function getMetrics(p) {
-            let pieces = [];
-            let centerX = 0, centerY = 0;
-            let groupCount = 0;
-            let visited = new Set();
-
-            for(let r=0; r<8; r++) {
-                for(let c=0; c<8; c++) {
-                    if(b[r][c] === p) {
-                        pieces.push({r,c});
-                        centerX += r;
-                        centerY += c;
-                    }
-                }
-            }
-
-            if (pieces.length === 0) return { groups: 0, concentration: 0, count: 0 };
-            
-            centerX /= pieces.length;
-            centerY /= pieces.length;
-
-            // Calculate concentration (inverse of average distance squared from COM)
-            let totalDistSq = 0;
-            pieces.forEach(pc => {
-                totalDistSq += (pc.r - centerX)**2 + (pc.c - centerY)**2;
-            });
-            let concentration = -totalDistSq; // Closer is better (less negative)
-
-            // Count groups
-            pieces.forEach(pc => {
-                const key = `${pc.r},${pc.c}`;
-                if(!visited.has(key)) {
-                    groupCount++;
-                    // BFS to mark group
-                    let q = [pc];
-                    visited.add(key);
-                    while(q.length > 0) {
-                        let curr = q.pop();
-                        for(let [dr, dc] of DIRECTIONS) {
-                            let nr = curr.r + dr, nc = curr.c + dc;
-                            if(isValidPos(nr, nc) && b[nr][nc] === p) {
-                                let nKey = `${nr},${nc}`;
-                                if(!visited.has(nKey)) {
-                                    visited.add(nKey);
-                                    q.push({r:nr, c:nc});
-                                }
-                            }
-                        }
-                    }
-                }
-            });
-
-            return { groups: groupCount, concentration, count: pieces.length };
-        }
-
-        const myMetrics = getMetrics(player);
-        const oppMetrics = getMetrics(-player);
-
-        if (myMetrics.groups === 1 && myMetrics.count > 0) return 10000; // Win
-        if (oppMetrics.groups === 1 && oppMetrics.count > 0) return -10000; // Loss
-
-        // Weights
-        const W_GROUPS = 200;
-        const W_CONC = 2;
-        const W_MAT = 10;
-        
-        let score = 0;
-        
-        // Fewer groups is better
-        score += (oppMetrics.groups - myMetrics.groups) * W_GROUPS;
-        
-        // Higher concentration is better
-        score += (myMetrics.concentration - oppMetrics.concentration) * W_CONC;
-
-        // Material is subtle in LOA. Sometimes fewer is better, but getting wiped out is bad.
-        // Let's just keep it minimal.
-        score += (myMetrics.count - oppMetrics.count) * W_MAT;
-
-        // Position on board (Edges are bad usually)
-        // ... omitted for performance/simplicity, concentration handles it mostly
-
-        return score;
-    }
-
-    function minimax(b, depth, alpha, beta, maximizingPlayer) {
-        const winner = checkWin(b);
-        if (winner !== null) {
-            if (winner === 'DRAW_WIN_MOVE') return maximizingPlayer ? 10000 : -10000; // Current mover wins ties
-            return (winner === aiSide) ? 10000 + depth : -10000 - depth;
-        }
-
-        if (depth === 0) {
-            return evaluateBoard(b, aiSide);
-        }
-
-        const player = maximizingPlayer ? aiSide : -aiSide;
-        const moves = getAllMoves(b, player);
-        
-        // Move ordering: try captures or moves toward center first? 
-        // For simplicity, random shuffle to vary play slightly or just keeping as is.
-        // Sorting moves by distance to center can help alpha-beta pruning.
-
-        if (moves.length === 0) {
-            // No moves available? In LOA this is rare but usually means loss or stalemate.
-            // If blocked, opponent wins.
-            return -10000; 
-        }
-
-        if (maximizingPlayer) {
-            let maxEval = -Infinity;
-            for (let move of moves) {
-                const newBoard = applyMove(b, move);
-                // Check immediate win condition rule: If move connects me, I win immediately even if enemy also connected
-                if (isConnected(newBoard, aiSide)) return 10000 + depth;
-
-                const ev = minimax(newBoard, depth - 1, alpha, beta, false);
-                maxEval = Math.max(maxEval, ev);
-                alpha = Math.max(alpha, ev);
-                if (beta <= alpha) break;
-            }
-            return maxEval;
-        } else {
-            let minEval = Infinity;
-            for (let move of moves) {
-                const newBoard = applyMove(b, move);
-                 // Check immediate win condition for opponent
-                 if (isConnected(newBoard, -aiSide)) return -10000 - depth;
-
-                const ev = minimax(newBoard, depth - 1, alpha, beta, true);
-                minEval = Math.min(minEval, ev);
-                beta = Math.min(beta, ev);
-                if (beta <= alpha) break;
-            }
-            return minEval;
-        }
-    }
-
-    function aiMove() {
-        if (gameOver) return;
-        isThinking = true;
-        updateStatus();
-
-        // Use setTimeout to allow UI to render "Thinking..."
-        setTimeout(() => {
-            const moves = getAllMoves(board, aiSide);
-            if (moves.length === 0) {
-                endGame(-aiSide); // Cannot move, lose
-                return;
-            }
-
-            let bestMove = null;
-            let bestValue = -Infinity;
-            let alpha = -Infinity;
-            let beta = Infinity;
-
-            // Depth based on difficulty
-            // Easy: 1, Normal: 2, Hard: 3 (LOA branching factor is high ~30, depth 4 is slow in JS)
-            let searchDepth = difficulty; 
-            if (difficulty === 3) searchDepth = 3; 
-
-            for (let move of moves) {
-                const newBoard = applyMove(board, move);
-                
-                // Instant Win Check
-                if (isConnected(newBoard, aiSide)) {
-                    bestMove = move;
-                    break;
-                }
-
-                const moveValue = minimax(newBoard, searchDepth - 1, alpha, beta, false);
-                
-                if (moveValue > bestValue) {
-                    bestValue = moveValue;
-                    bestMove = move;
-                }
-                alpha = Math.max(alpha, moveValue);
-            }
-
-            if (bestMove) {
-                executeMove(bestMove);
-            } else {
-                // Fallback (shouldn't happen unless blocked)
-                executeMove(moves[0]);
-            }
-        }, 50);
-    }
-
-    // --- Interaction ---
-
-    function handleCellClick(r, c) {
-        if (gameOver || isThinking || turn !== playerSide) return;
-
-        const piece = board[r][c];
-
-        // If clicking a valid move target
-        const move = legalMovesForSelected.find(m => m.r === r && m.c === c);
-        if (move) {
-            executeMove({from: selectedCell, to: move});
-            return;
-        }
-
-        // If clicking own piece (Select)
-        if (piece === playerSide) {
-            selectedCell = {r, c};
-            legalMovesForSelected = getLegalMoves(board, r, c);
-            renderBoard();
-        } else {
-            // Deselect
-            selectedCell = null;
-            legalMovesForSelected = [];
-            renderBoard();
-        }
-    }
-
-    function executeMove(move) {
-        board = applyMove(board, move);
-        lastMove = move;
-        selectedCell = null;
-        legalMovesForSelected = [];
-        
-        // Check win conditions
-        // Rule: If a move creates a win for BOTH, the moving player wins.
-        const moverWin = isConnected(board, turn);
-        const opponentWin = isConnected(board, -turn);
-
-        renderBoard();
-
-        if (moverWin) {
-            endGame(turn);
-        } else if (opponentWin) {
-            // Opponent won due to my move (rare, usually by me capturing piece that connected them)
-            endGame(-turn);
-        } else {
-            // Next turn
-            turn = -turn;
-            isThinking = false;
-            updateStatus();
-            
-            if (turn === aiSide) {
-                aiMove();
-            }
-        }
-    }
-
-    function endGame(winner) {
-        gameOver = true;
-        isThinking = false;
-        updateStatus();
-        let msg = winner === BLACK ? "Black Wins!" : "White Wins!";
-        if (winner === playerSide) msg += " Congratulations!";
-        else msg += " Try again.";
-        
-        document.getElementById('modal-title').innerText = winner === playerSide ? "Victory!" : "Defeat";
-        document.getElementById('modal-message').innerText = msg;
-        modal.style.display = 'flex';
-    }
-
-    function closeModal() {
-        modal.style.display = 'none';
-    }
-    
-    function openTutorial() {
-        tutorialModal.style.display = 'flex';
-    }
-
-    function closeTutorial() {
-        tutorialModal.style.display = 'none';
-    }
-
-    // --- Rendering ---
-    function renderBoard() {
-        boardEl.innerHTML = '';
-        
-        for (let r = 0; r < BOARD_SIZE; r++) {
-            for (let c = 0; c < BOARD_SIZE; c++) {
-                const cell = document.createElement('div');
-                cell.className = 'cell';
-                cell.onclick = () => handleCellClick(r, c);
-
-                // Highlights
-                if (selectedCell && selectedCell.r === r && selectedCell.c === c) {
-                    cell.classList.add('selected');
-                }
-                if (lastMove && ( (lastMove.from.r === r && lastMove.from.c === c) || (lastMove.to.r === r && lastMove.to.c === c) )) {
-                    cell.classList.add('last-move');
-                }
-                if (legalMovesForSelected.some(m => m.r === r && m.c === c)) {
-                    cell.classList.add('valid-move');
-                }
-
-                // Pieces
-                const pieceVal = board[r][c];
-                if (pieceVal !== EMPTY) {
-                    const piece = document.createElement('div');
-                    piece.className = `piece ${pieceVal === BLACK ? 'black' : 'white'}`;
-                    cell.appendChild(piece);
-                }
-
-                boardEl.appendChild(cell);
-            }
-        }
-    }
-
-    function updateStatus() {
-        let text = "";
-        if (gameOver) {
-            text = "Game Over";
-        } else {
-            if (turn === playerSide) text = "Your Turn";
-            else text = "Computer thinking";
-        }
-        
-        if (isThinking) {
-            statusEl.innerHTML = `${text} <div class="spinner"></div>`;
-        } else {
-            statusEl.textContent = text;
-        }
-    }
-
-    // Start
-    startGame();
-
-</script>
+  </div>
+
+  <!-- Settings -->
+  <div class="modal" id="modal-settings" role="dialog" aria-modal="true" aria-labelledby="settings-title" hidden>
+    <div class="modal-card narrow">
+      <button class="icon-btn modal-close" data-close data-i18n-title="close"><svg><use href="#i-close"/></svg></button>
+      <h2 id="settings-title" data-i18n="settings">Configurações</h2>
+      <div class="field">
+        <div class="field-label" data-i18n="theme">Tabuleiro</div>
+        <div class="themes" id="opt-theme">
+          <button data-value="wood"><span class="swatch wood"></span><span data-i18n="themeWood">Madeira</span></button>
+          <button data-value="slate"><span class="swatch slate"></span><span data-i18n="themeSlate">Ardósia</span></button>
+          <button data-value="jade"><span class="swatch jade"></span><span data-i18n="themeJade">Jade</span></button>
+          <button data-value="marble"><span class="swatch marble"></span><span data-i18n="themeMarble">Mármore</span></button>
+        </div>
+      </div>
+      <div class="toggles" id="opt-toggles">
+        <label class="toggle"><span data-i18n="optLinks">Mostrar conexões entre peças</span><input type="checkbox" data-key="links"><i></i></label>
+        <label class="toggle"><span data-i18n="optLegal">Mostrar lances possíveis</span><input type="checkbox" data-key="legal"><i></i></label>
+        <label class="toggle"><span data-i18n="optEval">Barra de avaliação</span><input type="checkbox" data-key="evalBar"><i></i></label>
+        <label class="toggle"><span data-i18n="optCoords">Coordenadas</span><input type="checkbox" data-key="coords"><i></i></label>
+        <label class="toggle"><span data-i18n="optAnim">Animações</span><input type="checkbox" data-key="anim"><i></i></label>
+        <label class="toggle"><span data-i18n="optSound">Efeitos sonoros</span><input type="checkbox" data-key="sound"><i></i></label>
+      </div>
+      <div class="field">
+        <div class="field-label" data-i18n="language">Idioma</div>
+        <div class="segmented" id="opt-lang">
+          <button data-value="pt">Português</button>
+          <button data-value="en">English</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Rules -->
+  <div class="modal" id="modal-rules" role="dialog" aria-modal="true" aria-labelledby="rules-title" hidden>
+    <div class="modal-card wide-card">
+      <button class="icon-btn modal-close" data-close data-i18n-title="close"><svg><use href="#i-close"/></svg></button>
+      <h2 id="rules-title" data-i18n="rulesTitle">Como jogar</h2>
+      <p class="rules-lead" data-i18n="rulesLead"></p>
+      <div class="rules-grid" id="rules-grid"></div>
+      <div class="rules-extra">
+        <h3 data-i18n="rulesMoreTitle">Detalhes</h3>
+        <ul id="rules-more"></ul>
+      </div>
+      <button class="btn primary wide" data-close data-i18n="gotIt">Entendi!</button>
+    </div>
+  </div>
+
+  <!-- Game over -->
+  <div class="modal" id="modal-over" role="dialog" aria-modal="true" aria-labelledby="over-title" hidden>
+    <div class="modal-card narrow over-card">
+      <div class="over-emblem" id="over-emblem"></div>
+      <h2 id="over-title"></h2>
+      <p class="over-sub" id="over-sub"></p>
+      <div class="over-stats" id="over-stats"></div>
+      <div class="over-actions">
+        <button class="btn" id="btn-review" data-i18n="review">Revisar partida</button>
+        <button class="btn primary" id="btn-again" data-i18n="playAgain">Jogar novamente</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <canvas class="confetti" id="confetti" aria-hidden="true"></canvas>
+
+  <script src="js/engine.js"></script>
+  <script src="js/app.js"></script>
 </body>
 </html>

@@ -1,0 +1,8 @@
+{
+  "name": "loa",
+  "private": true,
+  "description": "Lines of Action in the browser, with an AI opponent.",
+  "scripts": {
+    "test": "node --test"
+  }
+}
