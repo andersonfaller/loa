@@ -158,9 +158,13 @@
   };
 
   const browserLang = (navigator.language || 'en').toLowerCase().startsWith('pt') ? 'pt' : 'en';
+  const SETTINGS_VERSION = 2;
+  const savedSettings = store.get('settings', {});
+  // Version 1 saved evalBar while it still defaulted to on; let the new default (off) apply.
+  if (savedSettings.v !== SETTINGS_VERSION) delete savedSettings.evalBar;
   const settings = Object.assign({
-    theme: 'wood', sound: true, links: true, legal: true, evalBar: true, coords: true, anim: true, lang: browserLang
-  }, store.get('settings', {}));
+    theme: 'wood', sound: true, links: true, legal: true, evalBar: false, coords: true, anim: true, lang: browserLang
+  }, savedSettings, { v: SETTINGS_VERSION });
 
   function saveSettings() { store.set('settings', settings); }
 
@@ -388,7 +392,8 @@
     thinking: false,
     paused: false,
     hint: null,
-    evalBlack: null,
+    evalBlack: null,        // live evaluation shown on the bar (Black's point of view)
+    evals: [],              // analysed evaluation of the position after k moves (Black's point of view)
     info: null,
     startedAt: 0,
     endedAt: 0
@@ -421,8 +426,10 @@
     return humanToMove() && isLive() && !anyModalOpen();
   }
 
-  function payload(opts) {
-    return { start: Array.from(game.start), startSide: BLACK, moves: game.moves.map((r) => r.m), opts };
+  // Search request for the position after `upto` moves (default: the current position).
+  function payload(opts, upto) {
+    const moves = game.moves.slice(0, upto == null ? game.moves.length : upto).map((r) => r.m);
+    return { start: Array.from(game.start), startSide: BLACK, moves, opts };
   }
 
   function rebuildPos() {
@@ -677,6 +684,7 @@
     document.documentElement.dataset.theme = settings.theme;
     boardEl.classList.toggle('no-coords', !settings.coords);
     boardEl.classList.toggle('no-links', !settings.links);
+    document.documentElement.classList.toggle('no-eval', !settings.evalBar);
     document.body.classList.toggle('no-anim', !settings.anim);
   }
 
@@ -807,13 +815,18 @@
     bar.classList.toggle('hidden', !settings.evalBar);
     const bottom = bottomSide();
     bar.classList.toggle('top-black', bottom === WHITE);
+    const ev = isLive() ? game.evalBlack : game.evals[ui.review];
+    // Reviewed position not analysed yet: keep the bar where it is, dimmed, until the result arrives.
+    const pending = !isLive() && ev == null;
+    bar.classList.toggle('pending', pending);
+    if (pending) return;
     let pct = 50, text = '', bottomAhead = true;
     if (game.result && isLive()) {
       pct = game.result.winner === bottom ? 100 : game.result.winner ? 0 : 50;
       text = game.result.winner ? (game.result.winner === bottom ? '1–0' : '0–1') : '½';
       bottomAhead = game.result.winner !== 3 - bottom;
-    } else if (game.evalBlack != null) {
-      const sc = bottom === BLACK ? game.evalBlack : -game.evalBlack;
+    } else if (ev != null) {
+      const sc = bottom === BLACK ? ev : -ev;
       bottomAhead = sc >= 0;
       if (Math.abs(sc) >= WIN_THRESHOLD) pct = sc > 0 ? 100 : 0;
       else pct = Math.min(96, Math.max(4, 100 / (1 + Math.exp(-sc / 220))));
@@ -827,9 +840,9 @@
     label.style.bottom = bottomAhead ? '4px' : 'auto';
     label.style.color = regionSide === BLACK ? '#e9e3d6' : '#23262d';
     let title = t('evalTitle');
-    if (game.evalBlack != null && Math.abs(game.evalBlack) >= WIN_THRESHOLD) {
-      const winner = game.evalBlack > 0 ? BLACK : WHITE;
-      title += ': ' + sideName(winner) + ', ' + t('evalWin', { n: Math.ceil((WIN - Math.abs(game.evalBlack)) / 2) });
+    if (ev != null && Math.abs(ev) >= WIN_THRESHOLD) {
+      const winner = ev > 0 ? BLACK : WHITE;
+      title += ': ' + sideName(winner) + ', ' + t('evalWin', { n: Math.ceil((WIN - Math.abs(ev)) / 2) });
     }
     bar.title = title;
     bar.setAttribute('aria-label', title);
@@ -917,6 +930,7 @@
     game.paused = false;
     game.hint = null;
     game.evalBlack = null;
+    game.evals = [];
     game.info = null;
     game.startedAt = Date.now() - (restored ? restored.elapsed || 0 : 0);
     ui.review = null;
@@ -996,8 +1010,8 @@
     if (isAiSide(pos.side)) {
       if (game.mode === 'aivai' && game.paused) return;
       requestAiMove(delay || 0);
-    } else if (settings.evalBar && game.mode === 'pvp') {
-      requestAnalysis();
+    } else {
+      refreshLiveEval();
     }
   }
 
@@ -1029,12 +1043,43 @@
     });
   }
 
+  // In two-player mode nobody else searches the position, so analyse it for the bar.
+  function refreshLiveEval() {
+    if (!settings.evalBar || game.mode !== 'pvp' || game.result) return;
+    const cached = game.evals[game.moves.length];
+    if (cached != null) {
+      game.evalBlack = cached;
+      renderEval();
+    } else {
+      requestAnalysis();
+    }
+  }
+
   function requestAnalysis() {
     const gen = game.gen, ply = game.moves.length, side = game.pos.side;
     helperEngine.search(payload({ timeMs: 700 })).then((res) => {
       if (!res || gen !== game.gen || ply !== game.moves.length) return;
+      game.evals[ply] = side === BLACK ? res.score : -res.score;
       setEval(res.score, side);
     });
+  }
+
+  let reviewEvalTimer = 0;
+
+  // Analyses the reviewed position (debounced so stepping quickly through moves stays cheap).
+  function requestReviewEval() {
+    clearTimeout(reviewEvalTimer);
+    if (!settings.evalBar || isLive() || game.evals[ui.review] != null) return;
+    const gen = game.gen, k = ui.review;
+    reviewEvalTimer = setTimeout(() => {
+      if (gen !== game.gen || ui.review !== k) return;
+      const side = ui.reviewPos.side;
+      helperEngine.search(payload({ timeMs: 700 }, k)).then((res) => {
+        if (!res || gen !== game.gen) return;
+        game.evals[k] = side === BLACK ? res.score : -res.score;
+        renderEval();
+      });
+    }, 150);
   }
 
   function setEval(score, side) {
@@ -1057,6 +1102,7 @@
       ui.hintBusy = false;
       if (res && ply === game.moves.length && res.move !== PASS) {
         game.hint = { from: res.move & 63, to: res.move >> 6 };
+        game.evals[ply] = side === BLACK ? res.score : -res.score;
         setEval(res.score, side);
         const cap = game.pos.board[res.move >> 6] !== EMPTY;
         toast(t('hintToast', { move: LOA.moveName(res.move, cap) }));
@@ -1118,6 +1164,7 @@
     game.thinking = false;
     const undone = game.moves.slice(n).reverse();
     game.moves.length = n;
+    game.evals.length = Math.min(game.evals.length, n + 1);
     const hadResult = !!game.result;
     game.result = null;
     game.hint = null;
@@ -1161,6 +1208,12 @@
     }
     syncPieces(cells);
     renderAll();
+    if (isLive()) {
+      clearTimeout(reviewEvalTimer);
+      refreshLiveEval();
+    } else {
+      requestReviewEval();
+    }
   }
 
   function enterReview(k) { goTo(k); }
@@ -1361,8 +1414,10 @@
       settings[inp.dataset.key] = inp.checked;
       saveSettings();
       if (inp.dataset.key === 'sound' && inp.checked) Sound.play('select');
-      if (inp.dataset.key === 'evalBar' && inp.checked && game.mode === 'pvp' && !game.result) requestAnalysis();
       renderAll();
+      if (inp.dataset.key === 'evalBar' && inp.checked) {
+        if (isLive()) refreshLiveEval(); else requestReviewEval();
+      }
     });
   }
 
