@@ -47,7 +47,11 @@
   --board-size: min(calc(100vh - 250px), calc(100vw - 480px), 720px);
   --frame-pad: clamp(8px, 1.6vmin, 14px);
   --eval-w: 14px;
+  --eval-gap: 10px;
 }
+
+/* Evaluation bar switched off: give its space back to the board. */
+:root.no-eval { --eval-w: 0px; --eval-gap: 0px; }
 
 [data-theme="slate"] {
   --sq-light: #a3afbf;
@@ -208,10 +212,10 @@ svg { display: block; }
   display: flex;
   flex-direction: column;
   gap: 12px;
-  width: calc(var(--board-size) + 2 * var(--frame-pad) + var(--eval-w) + 10px);
+  width: calc(var(--board-size) + 2 * var(--frame-pad) + var(--eval-w) + var(--eval-gap));
 }
 
-.board-row { display: flex; gap: 10px; align-items: stretch; }
+.board-row { display: flex; gap: var(--eval-gap); align-items: stretch; }
 
 /* ---------- Player cards ---------- */
 
@@ -344,7 +348,9 @@ svg { display: block; }
   mix-blend-mode: difference;
   white-space: nowrap;
 }
-.eval-bar.hidden { opacity: 0; visibility: hidden; }
+.eval-bar.hidden { display: none; }
+.eval-bar.pending { opacity: 0.55; }
+.eval-bar.pending .eval-label { visibility: hidden; }
 
 /* ---------- Board ---------- */
 
@@ -961,12 +967,12 @@ svg { display: block; }
 
 @media (max-width: 960px) {
   :root {
-    --board-size: min(calc(100vw - 2 * clamp(12px, 3vw, 32px) - 2 * var(--frame-pad) - var(--eval-w) - 10px), 620px);
+    --board-size: min(calc(100vw - 2 * clamp(12px, 3vw, 32px) - 2 * var(--frame-pad) - var(--eval-w) - var(--eval-gap)), 620px);
     --eval-w: 10px;
   }
   .layout { grid-template-columns: 1fr; justify-items: center; }
   .stage { max-width: 100%; }
-  .panel { position: static; width: calc(var(--board-size) + 2 * var(--frame-pad) + var(--eval-w) + 10px); max-width: 100%; }
+  .panel { position: static; width: calc(var(--board-size) + 2 * var(--frame-pad) + var(--eval-w) + var(--eval-gap)); max-width: 100%; }
   .actions { grid-template-columns: repeat(3, 1fr); }
   .actions .btn.primary { grid-column: auto; }
   .move-list { max-height: 220px; }
